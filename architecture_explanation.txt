@@ -1,0 +1,139 @@
+================================================================================
+          REAL-TIME ANOMALY DETECTION SYSTEM: ARCHITECTURE & DESIGN
+================================================================================
+
+This document provides a comprehensive explanation of the architecture, components,
+machine learning pipeline, and technical rationale of the Real-Time Anomaly 
+Detection System.
+
+--------------------------------------------------------------------------------
+1. HIGH-LEVEL ARCHITECTURE & DATA FLOW
+--------------------------------------------------------------------------------
+
+The system is designed as a decoupled, real-time event-streaming pipeline. Below is
+the flow of data:
+
+    [ Producer ] (Simulates live metrics & sends JSON every 2 seconds)
+         │
+         ▼ (Pushes to topic: 'server-metrics')
+    [ Kafka Broker (managed via Zookeeper in Docker) ]
+         │
+         ▼ (Listens and consumes events sequentially)
+    [ Consumer ] (Orchestrator) ──► Loads [ Isolation Forest ML Model ]
+         │                                (Classifies data: Normal vs Anomaly)
+         ├─── If Anomaly ─────────► [ SQLite Database ] (Logs metrics & score)
+         ├─── If Anomaly ─────────► [ Alerts Module ] (Desktop / Email toast)
+         ▼
+    [ Streamlit Dashboard ] 
+         (Queries SQLite database every 3 seconds, rendering interactive 
+          Plotly charts and logging detected anomalies)
+
+Key Architecture Choices:
+* Decoupling: The data generation component (Producer) and the processing 
+  component (Consumer) operate completely independently. If the Consumer is 
+  stopped or crashes, Kafka buffers all messages on disk, preventing data loss. 
+  When the Consumer restarts, it resumes reading from where it left off.
+* Real-Time Stream Processing: Each metric point is evaluated by the ML model 
+  immediately upon arrival, which allows operators to respond to critical server 
+  failures within seconds.
+
+--------------------------------------------------------------------------------
+2. COMPONENT DEEP DIVE (FILE-BY-FILE SUMMARY)
+--------------------------------------------------------------------------------
+
+### A. Environment Configuration (`.env`)
+Stores key configuration parameters such as:
+- `KAFKA_BROKER`: Network address of the Kafka service (default: localhost:9092)
+- `KAFKA_TOPIC`: Topic name to send/read logs (default: server-metrics)
+- `DB_PATH`: Location of the SQLite database (default: database/anomalies.db)
+- `ALERT_METHOD`: How alerts are sent ('desktop', 'email', or 'both')
+- `SMTP_*` / `ALERT_RECEIVER`: Credentials and settings for automated email alerts
+
+### B. Infrastructure Containerization (`docker-compose.yml`)
+Spins up two Docker containers to host the event-streaming broker:
+1. `zookeeper`: A centralized service used by Kafka to store cluster metadata,
+   manage broker registry, and elect leaders.
+2. `kafka`: The primary messaging broker listening on port 9092.
+* Important Note: Uses Docker healthchecks to verify `zookeeper` is healthy before 
+  allowing `kafka` to spin up, preventing startup connection errors.
+
+### C. Data Ingestion & Simulation (`producer.py`)
+Generates synthetic system metrics every 2 seconds and publishes them to Kafka.
+- Metric Features:
+  1. CPU Usage (%): Centered around 40% under normal operation.
+  2. Memory Usage (%): Centered around 50% under normal operation.
+  3. Request Latency (ms): Centered around 120ms with log-normal behavior.
+  4. Error Rate: Logged as a float (0.0 to 1.0), normally close to 0%.
+- Anomaly Injection: Every 30 to 60 seconds (randomly determined), it injects a 
+  critical system failure:
+  - `cpu_spike`: CPU hits 90-100%
+  - `memory_leak`: Memory usage spikes to 95-100%
+  - `latency_storm`: Request latency spikes to 1200ms-2000ms
+  - `error_burst`: System error rate surges to 70-98%
+
+### D. Database Module (`database/db.py`)
+Handles data persistence using SQLite. It exposes helper functions:
+- `init_db()`: Creates the `metrics` table if it does not exist.
+- `insert_metric()`: Writes the metrics and model inference results.
+- `get_recent_metrics(n)`: Retrieves the last `n` data points for visualization.
+- `get_anomalies_only()`: Fetches list of flagged outliers for the alerts log.
+
+### E. Machine Learning Model (`model/train.py` & `model/detector.py`)
+- `train.py`: Generates 1,000 baseline "normal" metrics, fits an Isolation 
+  Forest algorithm, and serializes (saves) the model to `anomaly_model.pkl`
+  using `joblib`.
+- `detector.py`: Exposes a `detect()` function. It loads the cached 
+  `anomaly_model.pkl` file, processes incoming inputs into a Pandas DataFrame,
+  and returns:
+  - `is_anomaly` (boolean): Flagged outlier indicator.
+  - `anomaly_score` (float): Degree of outlier severity (positive values indicate 
+    anomalies).
+
+### F. Alerting Module (`alerts/notifier.py`)
+Provides real-time alert delivery mechanisms:
+- Desktop Alerts: Employs `plyer` to display native operating system toast alerts.
+- Email Alerts: Employs standard `smtplib` and `MIME` formats to establish SSL/TLS
+  connections to an SMTP server (e.g., Gmail) and dispatch notification emails.
+
+### G. Current Placeholders (`consumer.py` & `dashboard/app.py`)
+- `consumer.py`: Designed to read JSON records from the Kafka topic, feed them to 
+  `model/detector.py`, insert them into SQLite via `database/db.py`, and trigger 
+  `alerts/notifier.py` if an anomaly is identified.
+- `dashboard/app.py`: Designed to run as a Streamlit web application that queries
+  the SQLite database periodically to update real-time charts (via Plotly).
+
+--------------------------------------------------------------------------------
+3. THE MACHINE LEARNING ALGORITHM: ISOLATION FOREST
+--------------------------------------------------------------------------------
+
+The system utilizes the Isolation Forest algorithm from `scikit-learn` for 
+detecting anomalies. 
+
+How it works:
+Instead of modeling normal points to find differences, Isolation Forest isolates
+anomalies directly. It does this by randomly selecting a feature (like CPU usage)
+and randomly splitting values between the minimum and maximum ranges.
+- Since outliers (anomalies) have extreme values, they require very few random 
+  splits to isolate. They end up in short tree branches close to the root.
+- Normal, clustered points require many more splits to isolate, ending up deep 
+  in the tree structure.
+- Contamination Hyperparameter: Configured to `0.05` (5%), indicating we expect
+  about 5% of training samples to represent anomalous spikes.
+
+--------------------------------------------------------------------------------
+4. WHY THIS TECH STACK? (INTERVIEW RATIONALE)
+--------------------------------------------------------------------------------
+
+- Apache Kafka: Chosen over REST APIs or standard queues because it is a commit 
+  log. It handles high-throughput streams with low latency, persists events, 
+  and allows multiple distinct consumers to read from the exact same stream 
+  independently.
+- Isolation Forest: Highly effective for unsupervised multi-dimensional anomaly
+  detection. It has a fast inference time (O(1) relative to stream size), making
+  it perfect for low-latency streaming applications.
+- SQLite: A serverless, zero-configuration SQL database. Extremely lightweight 
+  and efficient for local portfolio applications and prototyping.
+- Streamlit & Plotly: Streamlit enables developers to create interactive, dynamic 
+  dashboards in pure Python, bypassing complex HTML/CSS/JS frontend setup, 
+  while Plotly provides high-quality real-time visualizations.
+================================================================================

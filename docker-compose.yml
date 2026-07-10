@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Zookeeper: Handles coordination, metadata, and leader election for Kafka brokers.
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    # Healthcheck to ensure Zookeeper is fully running before Kafka starts.
+    # Uses netcat (nc) to check if port 2181 is open and accepting TCP connections.
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Kafka Broker: The central streaming broker that stores and routes event messages.
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    # depends_on with condition: service_healthy ensures Kafka waits until Zookeeper is ready.
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      # Unique identifier for the broker in the cluster
+      KAFKA_BROKER_ID: 1
+      # Connection string to Zookeeper
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Maps external connections to localhost:9092 and internal docker networks to kafka:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      # Single-node cluster configurations (replication factor is set to 1)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
