@@ -2,16 +2,23 @@ import time
 import json
 import random
 import os
+import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 from kafka import KafkaProducer
 import numpy as np
+from prometheus_client import Counter, start_http_server
 
 # Load configuration parameters from the .env file
 load_dotenv()
 
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "server-metrics")
+METRICS_PORT = int(os.getenv("METRICS_PORT", "8000"))
+
+# Prometheus metrics
+events_produced = Counter('events_produced_total', 'Total events produced to Kafka')
+anomalies_injected = Counter('anomalies_injected_total', 'Total anomalies intentionally injected')
 
 def create_kafka_producer():
     """
@@ -44,8 +51,10 @@ def simulate_metrics(inject_anomaly=False):
     """
     Generates simulated server metrics.
     If inject_anomaly is True, injects high-impact outliers (spikes).
+    Each message includes a unique event_id (UUID4) for idempotent processing.
     """
     timestamp = datetime.now().isoformat()
+    event_id = str(uuid.uuid4())
 
     if not inject_anomaly:
         # ---- Normal healthy behavior (following realistic statistical distributions) ----
@@ -90,8 +99,9 @@ def simulate_metrics(inject_anomaly=False):
             request_latency = float(random.uniform(150.0, 300.0))
             error_rate = float(random.uniform(0.70, 0.98))  # 70% to 98% error rates
 
-    # Pack metrics into JSON envelope
+    # Pack metrics into JSON envelope with unique event_id for idempotency
     return {
+        "event_id": event_id,
         "timestamp": timestamp,
         "cpu_usage": round(cpu_usage, 2),
         "memory_usage": round(memory_usage, 2),
@@ -103,7 +113,15 @@ def run_producer():
     """
     Main loop that connects to Kafka and streams metrics.
     Automatically schedules periodic anomaly injections.
+    Exposes Prometheus metrics on METRICS_PORT.
     """
+    # Start Prometheus metrics HTTP server
+    try:
+        start_http_server(METRICS_PORT)
+        print(f"[Producer] Prometheus metrics exposed on port {METRICS_PORT}")
+    except Exception as e:
+        print(f"[Producer] Warning: Could not start metrics server: {e}")
+
     try:
         producer = create_kafka_producer()
     except Exception as e:
@@ -132,13 +150,15 @@ def run_producer():
             if inject:
                 iterations_to_anomaly = random.randint(15, 30)
                 print(f"[Simulation] Anomaly injected. Next scheduled in {iterations_to_anomaly * 2} seconds.")
+                anomalies_injected.inc()
 
             # Send payload to Kafka
             producer.send(KAFKA_TOPIC, payload)
+            events_produced.inc()
             
             # Output message preview to console for debugging
             status_label = "🚨 ANOMALY" if inject else "✅ NORMAL "
-            print(f"{status_label} | {payload['timestamp']} | "
+            print(f"{status_label} | {payload['event_id'][:8]}... | {payload['timestamp']} | "
                   f"CPU: {payload['cpu_usage']}% | "
                   f"Mem: {payload['memory_usage']}% | "
                   f"Latency: {payload['request_latency']}ms | "

@@ -1,7 +1,18 @@
-version: '3.8'
+# ============================================================
+# Fault-Tolerant Distributed Anomaly Detection Platform
+# ============================================================
+# Services:
+#   Infrastructure: zookeeper, kafka, kafka-setup, redis, postgres, minio
+#   Application:    producer, consumer-1/2/3, scorer-1/2
+#   Observability:  prometheus, grafana
+#   Chaos Testing:  chaos-runner
+# ============================================================
 
 services:
-  # Zookeeper: Handles coordination, metadata, and leader election for Kafka brokers.
+
+  # ========== INFRASTRUCTURE ==========
+
+  # Zookeeper: Coordination service for Kafka
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper
@@ -10,33 +21,315 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    # Healthcheck to ensure Zookeeper is fully running before Kafka starts.
-    # Uses netcat (nc) to check if port 2181 is open and accepting TCP connections.
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "2181"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Kafka Broker: The central streaming broker that stores and routes event messages.
+  # Kafka Broker: Central event streaming backbone
   kafka:
     image: confluentinc/cp-kafka:7.3.0
     container_name: kafka
     ports:
       - "9092:9092"
-    # depends_on with condition: service_healthy ensures Kafka waits until Zookeeper is ready.
     depends_on:
       zookeeper:
         condition: service_healthy
     environment:
-      # Unique identifier for the broker in the cluster
       KAFKA_BROKER_ID: 1
-      # Connection string to Zookeeper
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # Maps external connections to localhost:9092 and internal docker networks to kafka:29092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
-      # Single-node cluster configurations (replication factor is set to 1)
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # One-shot container to create the topic with 6 partitions
+  kafka-setup:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka-setup
+    depends_on:
+      kafka:
+        condition: service_healthy
+    # List form for command, so Compose passes the script as a single argument
+    # instead of word-splitting it. Each kafka-topics call stays on one line:
+    # backslash continuations inside a YAML block are fragile and were silently
+    # turning --create into its own command.
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        echo 'Creating Kafka topic server-metrics with 6 partitions...'
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic server-metrics --partitions 6 --replication-factor 1
+        echo 'Topic created. Describing:'
+        kafka-topics --bootstrap-server kafka:29092 --describe --topic server-metrics
+
+  # Redis: Deduplication store + leader election lock
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6380:6379"   # host 6380: local redis-server holds 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # PostgreSQL: Multi-writer metrics database (replaces SQLite)
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    ports:
+      - "5433:5432"   # host 5433: 5432 is often already in use
+    environment:
+      POSTGRES_USER: anomaly
+      POSTGRES_PASSWORD: anomaly
+      POSTGRES_DB: anomalydb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anomaly -d anomalydb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MinIO: S3-compatible model checkpoint store
+  minio:
+    image: minio/minio:latest   # TODO: pin to a verified RELEASE.* tag
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== APPLICATION SERVICES ==========
+
+  # Producer: Simulates server metrics and publishes to Kafka
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: producer
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: producer
+      NODE_ID: producer
+      METRICS_PORT: "8000"
+    ports:
+      - "8010:8000"   # host 8010: wslrelay holds 8000
+    depends_on:
+      kafka-setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Consumer Group: 3 distributed consumer instances
+  consumer-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: consumer-1
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: consumer
+      NODE_ID: consumer-1
+      METRICS_PORT: "8001"
+      SCORER_URL: http://scorer-1:8002,http://scorer-2:8002
+    ports:
+      - "8011:8001"
+    depends_on:
+      kafka-setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      scorer-1:
+        condition: service_started
+    restart: always
+
+  consumer-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: consumer-2
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: consumer
+      NODE_ID: consumer-2
+      METRICS_PORT: "8001"
+      SCORER_URL: http://scorer-1:8002,http://scorer-2:8002
+    ports:
+      - "8012:8001"
+    depends_on:
+      kafka-setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      scorer-1:
+        condition: service_started
+    restart: always
+
+  consumer-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: consumer-3
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: consumer
+      NODE_ID: consumer-3
+      METRICS_PORT: "8001"
+      SCORER_URL: http://scorer-1:8002,http://scorer-2:8002
+    ports:
+      - "8013:8001"
+    depends_on:
+      kafka-setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      scorer-1:
+        condition: service_started
+    restart: always
+
+  # Scorer Nodes: Model inference + leader-elected retraining
+  scorer-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scorer-1
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: scorer
+      NODE_ID: scorer-1
+      METRICS_PORT: "8002"
+      HEALTH_PATH: /health
+    ports:
+      - "8021:8002"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: always
+
+  scorer-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scorer-2
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: scorer
+      NODE_ID: scorer-2
+      METRICS_PORT: "8002"
+      HEALTH_PATH: /health
+    ports:
+      - "8022:8002"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: always
+
+  # ========== OBSERVABILITY ==========
+
+  # Prometheus: Metrics collection
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - producer
+      - consumer-1
+      - consumer-2
+      - consumer-3
+      - scorer-1
+      - scorer-2
+    restart: unless-stopped
+
+  # Grafana: Metrics visualization dashboards
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ========== CHAOS TESTING ==========
+
+  # Chaos Runner: Kills random consumer containers and measures recovery
+  chaos-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chaos-runner
+    env_file:
+      - .env.docker
+    environment:
+      SERVICE_ROLE: chaos
+      NODE_ID: chaos-runner
+      CHAOS_METRICS_PORT: "8003"
+      METRICS_PORT: "8003"
+      CHAOS_INTERVAL_SECONDS: "60"
+      CHAOS_TOTAL_KILLS: "5"
+      PROMETHEUS_URL: http://prometheus:9090
+    ports:
+      - "8003:8003"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./chaos_results:/app/chaos_results
+    depends_on:
+      - consumer-1
+      - consumer-2
+      - consumer-3
+      - prometheus
+    restart: "no"
+    # Chaos runner starts after a 60-second delay to let the system stabilize
+    entrypoint: ["sh", "-c", "echo 'Waiting 60s for cluster to stabilize...' && sleep 60 && python -m chaos.chaos_runner"]
+
+volumes:
+  pgdata:
+  miniodata:
+  grafanadata:

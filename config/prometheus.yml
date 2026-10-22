@@ -1,0 +1,53 @@
+# Prometheus Configuration
+# Scrapes metrics from all anomaly detection services
+
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # Producer metrics
+  - job_name: 'producer'
+    static_configs:
+      - targets: ['producer:8000']
+        labels:
+          service: 'producer'
+          node: 'producer'
+
+  # Consumer group metrics (3 nodes)
+  - job_name: 'consumers'
+    static_configs:
+      - targets: ['consumer-1:8001']
+        labels:
+          service: 'consumer'
+          node: 'consumer-1'
+      - targets: ['consumer-2:8001']
+        labels:
+          service: 'consumer'
+          node: 'consumer-2'
+      - targets: ['consumer-3:8001']
+        labels:
+          service: 'consumer'
+          node: 'consumer-3'
+
+  # Scorer service metrics (2 nodes)
+  - job_name: 'scorers'
+    static_configs:
+      - targets: ['scorer-1:8002']
+        labels:
+          service: 'scorer'
+          node: 'scorer-1'
+      - targets: ['scorer-2:8002']
+        labels:
+          service: 'scorer'
+          node: 'scorer-2'
+
+  # Chaos runner: exposes chaos_kills_total and chaos_recovery_seconds.
+  # It is a short-lived job that exits when the test finishes, so Prometheus
+  # will show this target as down between runs. That is expected.
+  - job_name: 'chaos'
+    static_configs:
+      - targets: ['chaos-runner:8003']
+        labels:
+          service: 'chaos'
+          node: 'chaos-runner'
