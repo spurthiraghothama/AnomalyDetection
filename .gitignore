@@ -53,6 +53,7 @@ database/anomalies.db
 
 # Model files (optional - exclude large models)
 # model/anomaly_model.pkl
+*.pkl
 
 # OS
 .DS_Store
@@ -61,3 +62,18 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Chaos test results (generated output), except the committed report
+chaos_results/*
+!chaos_results/chaos_report.md
+
+# Grafana data volume
+config/grafana/data/
+
+# Docker volumes
+pgdata/
+miniodata/
+grafanadata/
+
+# Personal interview prep notes - not part of the project
+interview_prep*
