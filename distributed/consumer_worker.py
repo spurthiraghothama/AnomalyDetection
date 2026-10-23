@@ -336,6 +336,17 @@ def run_consumer():
     except Exception as e:
         logger.warning(f"Could not start metrics server: {e}")
 
+    # Touch every label combination this node can emit, so each series exists
+    # at zero from startup. Prometheus client libraries create a labelled child
+    # lazily on first use, so a counter that has legitimately never fired has no
+    # series at all and Grafana renders "No data" rather than 0. That is
+    # actively misleading here: a duplicate counter with no series means
+    # deduplication is working, not that the metric is broken.
+    events_duplicates_skipped.labels(node_id=NODE_ID)
+    anomalies_detected.labels(node_id=NODE_ID)
+    for _reason in ("malformed", "max_attempts"):
+        events_dropped.labels(node_id=NODE_ID, reason=_reason)
+
     # Initialize components
     deduplicator = RedisDeduplicator(REDIS_URL, ttl_seconds=DEDUPE_TTL_SECONDS)
     scorer = ScorerClient(SCORER_URLS)

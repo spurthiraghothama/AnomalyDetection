@@ -127,7 +127,57 @@ docker compose down -v  # -v removes volumes for a clean restart
 
 ### Grafana Dashboard (http://localhost:3000)
 
-Pre-provisioned dashboard with panels for:
+The dashboard is provisioned from `config/grafana/provisioning/`, so it exists
+the moment the cluster starts. There is no manual import step.
+
+**System overview and anomaly detection**
+
+![Grafana dashboard: throughput, latency, consumer lag and rebalance events](docs/images/dashboard-top.png)
+
+**Scorer leader election, chaos testing and node health**
+
+![Grafana dashboard: scorer roles, chaos kills and service health](docs/images/dashboard-bottom.png)
+
+Both screenshots were taken during a live chaos run. The repeated bars in
+*Consumer Rebalance Events* and the spikes in *Chaos Kills Timeline* are five
+consumers being killed one at a time, and the latency spike is the cluster
+re-forming its consumer group after each one.
+
+#### Throughput redistributing across surviving nodes
+
+![Events consumed per second, by node](docs/images/events-per-sec.png)
+
+Each consumer reports its own throughput. When one is killed its line drops to
+zero and the survivors rise to absorb its partitions.
+
+#### Leader election
+
+![Scorer node roles over time](docs/images/scorer-roles.png)
+
+`node_role` is 1 for the leader and 0 for followers. When the leader dies its
+Redis lock expires and a follower takes over. Both nodes keep serving inference
+throughout, so an election never interrupts the request path.
+
+#### Recovery after each chaos kill
+
+![Average and slowest recovery time after each kill](docs/images/chaos-recovery.png)
+
+This measures container restart time, not time to full throughput. See
+[Measured Results](#measured-results) for what these numbers do and do not
+establish.
+
+#### Regenerating these images
+
+The stack includes a `renderer` service (Grafana's headless image renderer), so
+panel images can be regenerated instead of re-screenshotted by hand. Panel ids
+live in the dashboard JSON:
+
+```bash
+curl -u admin:admin -o docs/images/events-per-sec.png \
+  "http://localhost:3000/render/d-solo/anomaly-detection-main/anomaly?panelId=2&width=1200&height=450&from=now-1h&to=now"
+```
+
+Panels are grouped as:
 - **Events Consumed/sec** (by node) — shows throughput per consumer
 - **Processing Latency** (p50/p95/p99) — end-to-end event processing time
 - **Consumer Lag** (by partition) — shows rebalance impact during failures

@@ -271,6 +271,15 @@ services:
       - "9090:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Without this, every restart of Prometheus discards all metric history.
+      - promdata:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --web.enable-lifecycle
     depends_on:
       - producer
       - consumer-1
@@ -290,11 +299,24 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Headless PNG rendering, so dashboard images can be generated on demand
+      # (docs/images/) instead of hand-screenshotting panels.
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_LOG_FILTERS: rendering:info
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafanadata:/var/lib/grafana
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  # Grafana image renderer: headless Chromium used by /render endpoints
+  renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: renderer
+    environment:
+      ENABLE_METRICS: "false"
     restart: unless-stopped
 
   # ========== CHAOS TESTING ==========
@@ -331,5 +353,6 @@ services:
 
 volumes:
   pgdata:
+  promdata:
   miniodata:
   grafanadata:

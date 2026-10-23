@@ -21,17 +21,30 @@
     {
       "title": "System Overview",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
-      "collapsed": false
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "id": 1
     },
     {
       "title": "Events Consumed / sec (by node)",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 15,
@@ -47,16 +60,24 @@
           "legendFormat": "{{node}}",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 2
     },
     {
       "title": "Processing Latency (p50 / p95 / p99)",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 10,
@@ -81,16 +102,24 @@
           "legendFormat": "p99",
           "refId": "C"
         }
-      ]
+      ],
+      "id": 3
     },
     {
       "title": "Consumer Lag (by partition)",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 20,
@@ -106,16 +135,25 @@
           "legendFormat": "{{node}} partition-{{partition}}",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 4
     },
     {
       "title": "Consumer Rebalance Events",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "orange", "mode": "fixed" },
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 30,
@@ -131,27 +169,50 @@
           "legendFormat": "{{node}}",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 5
     },
     {
       "title": "Anomaly Detection",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
-      "collapsed": false
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "collapsed": false,
+      "id": 6
     },
     {
       "title": "Anomalies Detected / min",
       "type": "stat",
       "datasource": "Prometheus",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 18 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 18
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 2 },
-              { "color": "red", "value": 5 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
             ]
           },
           "unit": "short"
@@ -162,16 +223,25 @@
           "expr": "sum(increase(anomalies_detected_total[1m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 7
     },
     {
       "title": "Events Produced Total",
       "type": "stat",
       "datasource": "Prometheus",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 18 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 18
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "unit": "short"
         }
       },
@@ -180,34 +250,52 @@
           "expr": "events_produced_total",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 8
     },
     {
       "title": "Duplicates Skipped Total",
       "type": "stat",
       "datasource": "Prometheus",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 18 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 18
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
           "unit": "short"
         }
       },
       "targets": [
         {
-          "expr": "sum(events_duplicates_skipped_total)",
+          "expr": "sum(events_duplicates_skipped_total) or vector(0)",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 9
     },
     {
       "title": "Inference Requests / sec",
       "type": "stat",
       "datasource": "Prometheus",
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 18 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 18
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "cyan", "mode": "fixed" },
+          "color": {
+            "fixedColor": "cyan",
+            "mode": "fixed"
+          },
           "unit": "reqps"
         }
       },
@@ -216,27 +304,43 @@
           "expr": "sum(rate(inference_requests_total[1m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 10
     },
     {
       "title": "Scorer & Leader Election",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
-      "collapsed": false
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "collapsed": false,
+      "id": 11
     },
     {
       "title": "Scorer Node Roles (1=Leader, 0=Follower)",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 25 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 3,
             "fillOpacity": 25,
             "showPoints": "never",
-            "stacking": { "mode": "none" }
+            "stacking": {
+              "mode": "none"
+            }
           },
           "min": 0,
           "max": 1.5,
@@ -249,16 +353,24 @@
           "legendFormat": "{{node}}",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 12
     },
     {
       "title": "Inference Latency (by scorer node)",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 25 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 10,
@@ -278,22 +390,37 @@
           "legendFormat": "{{node}} p50",
           "refId": "B"
         }
-      ]
+      ],
+      "id": 13
     },
     {
       "title": "Chaos Testing",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
-      "collapsed": false
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "collapsed": false,
+      "id": 14
     },
     {
       "title": "Chaos Kills Timeline",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 33 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "red", "mode": "fixed" },
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 40,
@@ -310,21 +437,38 @@
           "legendFormat": "Kills",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 15
     },
     {
       "title": "Recovery Time After Kill (seconds)",
       "type": "timeseries",
       "datasource": "Prometheus",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 33 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 15 },
-              { "color": "red", "value": 30 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 15
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
             ]
           },
           "custom": {
@@ -338,34 +482,69 @@
       },
       "targets": [
         {
-          "expr": "chaos_recovery_seconds",
-          "legendFormat": "Recovery Time",
+          "expr": "chaos_recovery_seconds_sum / chaos_recovery_seconds_count",
+          "legendFormat": "avg recovery",
           "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(1.0, rate(chaos_recovery_seconds_bucket[10m]))",
+          "legendFormat": "slowest recovery",
+          "refId": "B"
         }
-      ]
+      ],
+      "id": 16
     },
     {
       "title": "Node Health",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
-      "collapsed": false
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "collapsed": false,
+      "id": 17
     },
     {
       "title": "Service Up / Down Status",
       "type": "stat",
       "datasource": "Prometheus",
-      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 41 },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
           },
           "mappings": [
-            { "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } }, "type": "value" }
+            {
+              "options": {
+                "0": {
+                  "text": "DOWN"
+                },
+                "1": {
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
           ]
         }
       },
@@ -380,15 +559,25 @@
           "legendFormat": "{{job}} / {{node}}",
           "refId": "A"
         }
-      ]
+      ],
+      "id": 18
     }
   ],
   "refresh": "5s",
   "schemaVersion": 30,
   "style": "dark",
-  "tags": ["anomaly-detection", "distributed", "chaos"],
-  "templating": { "list": [] },
-  "time": { "from": "now-30m", "to": "now" },
+  "tags": [
+    "anomaly-detection",
+    "distributed",
+    "chaos"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Anomaly Detection Platform",
